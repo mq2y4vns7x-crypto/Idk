@@ -5,78 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nebula Edge AI</title>
     <style>
-        :root { --bg: #050510; --accent: #8a70ff; --text: #ffffff; }
-        body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .screen { width: 360px; height: 740px; border: 2px solid #222; border-radius: 40px; display: none; flex-direction: column; overflow: hidden; position: relative; }
+        :root { --bg: #050510; --card: #111126; --accent: #8a70ff; --text: #ffffff; }
+        body, html { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
+        
+        .screen { width: 100%; height: 100%; display: none; flex-direction: column; position: relative; }
         .active { display: flex; }
-        /* Simple Splash styles */
-        #splash { justify-content: center; align-items: center; text-align: center; }
-        .btn { background: var(--accent); color: white; border: none; padding: 15px 30px; border-radius: 20px; cursor: pointer; }
-        /* Voice screen styles */
-        #voice-screen { justify-content: center; align-items: center; }
-        .orb { width: 150px; height: 150px; background: radial-gradient(circle, #00d4ff, var(--accent)); border-radius: 50%; filter: blur(15px); transition: 0.3s; }
-        .pulse { animation: pulse 1s infinite; transform: scale(1.2); filter: blur(25px); }
-        @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+        /* SPLASH SCREEN */
+        #splash { justify-content: center; align-items: center; text-align: center; padding: 20px; }
+        .get-started { background: linear-gradient(45deg, var(--accent), #00d4ff); border: none; padding: 15px 40px; border-radius: 30px; color: white; font-weight: bold; cursor: pointer; margin-top: 20px; }
+
+        /* DASHBOARD */
+        .header { padding: 50px 20px 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 20px; }
+        .tile { background: var(--card); border: 1px solid #222; padding: 30px; border-radius: 20px; text-align: center; }
+
+        /* THE HYBRID TALK SCREEN (Reference Image 3) */
+        #talk-screen { justify-content: center; align-items: center; }
+        .orb-box { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; }
+        .orb { width: 180px; height: 180px; background: radial-gradient(circle, #00d4ff, var(--accent), transparent); border-radius: 50%; filter: blur(20px); transition: 0.5s; opacity: 0.6; }
+        .listening { transform: scale(1.2); filter: blur(35px) brightness(1.3); animation: pulse 1.5s infinite; opacity: 1; }
+
+        /* INPUT BAR (Now on the Talk Screen too!) */
+        .input-area { width: 100%; padding: 20px; box-sizing: border-box; background: #0a0a1a; display: flex; gap: 10px; align-items: center; border-top: 1px solid #222; }
+        input { flex: 1; background: #161632; border: 1px solid #333; padding: 12px 18px; border-radius: 25px; color: white; outline: none; }
+        .btn-round { width: 45px; height: 45px; border-radius: 50%; border: none; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+        
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
     </style>
 </head>
 <body>
 
     <div id="splash" class="screen active">
-        <h1>Nebula Edge</h1>
-        <input type="text" id="userName" placeholder="Your Name" style="margin: 10px; padding: 10px; border-radius: 5px;">
-        <button class="btn" onclick="startApp()">GET STARTED</button>
+        <h1 style="font-size: 3rem; letter-spacing: 5px;">NEBULA</h1>
+        <p>From content creation to smart automation</p>
+        <input type="text" id="nameInput" placeholder="Enter your name" style="margin-bottom: 20px; text-align: center;">
+        <button class="get-started" onclick="startApp()">GET STARTED</button>
     </div>
 
-    <div id="voice-screen" class="screen">
-        <h2 id="greeting">Hello</h2>
-        <div class="orb" id="orb"></div>
-        <p id="status">Tap to speak</p>
-        <button class="btn" id="micBtn" onclick="toggleMic()">🎤 Start/Stop</button>
+    <div id="dashboard" class="screen">
+        <div class="header">
+            <h1 id="userGreeting">Hello, User</h1>
+            <p>What can Nebula Edge do for you?</p>
+        </div>
+        <div class="grid">
+            <div class="tile" onclick="openTalk()">🎙️ Voice Mode</div>
+            <div class="tile">🎨 Images</div>
+            <div class="tile">🎥 Video</div>
+            <div class="tile">🧠 Brainstorm</div>
+        </div>
+    </div>
+
+    <div id="talk-screen" class="screen">
+        <button onclick="closeTalk()" style="position: absolute; top: 50px; left: 20px; background: none; border: none; color: white; font-size: 20px;">✕</button>
+        <div class="orb-box">
+            <div class="orb" id="mainOrb"></div>
+            <h2 id="status">Speaking...</h2>
+            <p id="ai-text-preview" style="padding: 20px; text-align: center; font-size: 14px; color: #aaa;"></p>
+        </div>
+
+        <div class="input-area">
+            <button class="btn-round" id="micBtn" onclick="toggleMic()" style="background: #222; color: #8a70ff;">🎤</button>
+            <input type="text" id="typeInput" placeholder="Type or use the mic...">
+            <button class="btn-round" onclick="handleTypedInput()" style="background: var(--accent); color: white;">➤</button>
+        </div>
     </div>
 
 <script type="module">
     import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
-    // THIS IS THE SECRET PART
+    // GITHUB SECRET INJECTION POINT
     const API_KEY = "REPLACE_ME_BY_GITHUB_ACTIONS"; 
-    
-    let isListening = false;
-    let name = "User";
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
 
+    let isListening = false;
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = false;
+
+    // LOGIN
     window.startApp = () => {
-        name = document.getElementById('userName').value || "User";
-        document.getElementById('greeting').innerText = `Hello, ${name}`;
+        const name = document.getElementById('nameInput').value || "User";
+        document.getElementById('userGreeting').innerText = `Hello, ${name}`;
         document.getElementById('splash').classList.remove('active');
-        document.getElementById('voice-screen').classList.add('active');
+        document.getElementById('dashboard').classList.add('active');
     };
 
+    window.openTalk = () => {
+        document.getElementById('dashboard').classList.remove('active');
+        document.getElementById('talk-screen').classList.add('active');
+    };
+
+    window.closeTalk = () => {
+        document.getElementById('talk-screen').classList.remove('active');
+        document.getElementById('dashboard').classList.add('active');
+    };
+
+    // VOICE LOGIC
     window.toggleMic = () => {
         if (!isListening) {
             recognition.start();
             isListening = true;
-            document.getElementById('orb').classList.add('pulse');
+            document.getElementById('mainOrb').classList.add('listening');
             document.getElementById('status').innerText = "Listening...";
         } else {
             recognition.stop();
             isListening = false;
-            document.getElementById('orb').classList.remove('pulse');
+            document.getElementById('mainOrb').classList.remove('listening');
         }
     };
 
     recognition.onresult = async (event) => {
+        isListening = false;
+        document.getElementById('mainOrb').classList.remove('listening');
         const text = event.results[0][0].transcript;
-        document.getElementById('status').innerText = "Thinking...";
-        
-        const result = await model.generateContent(text);
-        const aiText = result.response.text();
-        
-        const talk = new SpeechSynthesisUtterance(aiText);
-        window.speechSynthesis.speak(talk);
-        document.getElementById('status').innerText = "Nebula Edge is speaking...";
+        processAI(text);
     };
+
+    // TYPE LOGIC
+    window.handleTypedInput = () => {
+        const text = document.getElementById('typeInput').value;
+        if(text) processAI(text);
+        document.getElementById('typeInput').value = "";
+    };
+
+    async function processAI(text) {
+        document.getElementById('status').innerText = "Thinking...";
+        try {
+            const result = await model.generateContent(text);
+            const response = result.response.text();
+            
+            document.getElementById('status').innerText = "Nebula Edge";
+            document.getElementById('ai-text-preview').innerText = response;
+
+            // VOICE RESPONSE
+            const speech = new SpeechSynthesisUtterance(response);
+            window.speechSynthesis.speak(speech);
+        } catch (e) {
+            document.getElementById('status').innerText = "Error - check API key";
+        }
+    }
 </script>
 </body>
 </html>
