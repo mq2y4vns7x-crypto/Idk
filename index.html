@@ -2,19 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NASA Next-Gen Earth | API Integrated</title>
+    <title>NASA Next-Gen Earth | Live API Entry</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
         #canvas-container { width: 100vw; height: 100vh; }
-        .controls-hint {
-            position: absolute; top: 20px; left: 20px;
-            color: white; font-family: monospace; pointer-events: none;
-        }
+        #ui { position: absolute; top: 20px; left: 20px; color: #0f0; background: rgba(0,0,0,0.8); padding: 12px; border: 1px solid #0f0; z-index: 100; }
     </style>
 </head>
 <body>
 
-    <div class="controls-hint">NASA API STATUS: <span id="api-status">INITIALIZING...</span></div>
+    <div id="ui">SYSTEM STATUS: <span id="status">WAITING FOR KEY...</span></div>
     <div id="canvas-container"></div>
 
     <script type="importmap">
@@ -30,10 +27,8 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // ==========================================
-        // 1. YOUR NASA API KEY GOES HERE
-        // ==========================================
-        const MY_NASA_API_KEY = "aUiSXl9ZpKmkdgA9lK41GHhLRcf94FiMx5eD6vXI"; 
+        // --- 1. POP-UP FOR API KEY ---
+        const USER_KEY = prompt("Please paste your NASA API Key:", "DEMO_KEY");
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -44,75 +39,58 @@
         document.getElementById('canvas-container').appendChild(renderer.domElement);
         new OrbitControls(camera, renderer.domElement);
 
-        // Shaders for Day/Night blending
-        const vShader = `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vSunDir;
-            void main() {
-                vUv = uv;
-                vNormal = normalize(normalMatrix * normal);
-                vSunDir = normalize((viewMatrix * vec4(vec3(5, 3, 5), 0.0)).xyz);
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-
-        const fShader = `
-            uniform sampler2D dayTex;
-            uniform sampler2D nightTex;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vSunDir;
-            void main() {
-                float intensity = dot(vNormal, vSunDir);
-                vec3 day = texture2D(dayTex, vUv).rgb;
-                vec3 night = texture2D(nightTex, vUv).rgb;
-                gl_FragColor = vec4(mix(night, day, smoothstep(-0.1, 0.1, intensity)), 1.0);
-            }
-        `;
-
         async function init() {
-            const loader = new THREE.TextureLoader();
-            
-            // Using your API Key to check the EPIC (Earth Polychromatic Imaging Camera) service
-            // This validates your key for the demo.
+            // 2. CONNECT TO NASA
             try {
-                const response = await fetch(`https://api.nasa.gov/EPIC/api/natural?api_key=${MY_NASA_NASA_API_KEY}`);
-                if(response.ok) document.getElementById('api-status').innerText = "AUTHORIZED";
-            } catch(e) {
-                document.getElementById('api-status').innerText = "DEMO MODE (KEY MISSING)";
+                const response = await fetch(`https://api.nasa.gov/EPIC/api/natural?api_key=${USER_KEY}`);
+                if (response.ok) {
+                    document.getElementById('status').innerText = "AUTHORIZED - NASA LIVE";
+                } else {
+                    document.getElementById('status').innerText = "KEY INVALID - USING DEMO ASSETS";
+                    document.getElementById('status').style.color = "orange";
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = "OFFLINE - DEMO MODE";
             }
 
-            // Load high-fidelity textures
+            // 3. LOAD TEXTURES
+            const loader = new THREE.TextureLoader();
             const [day, night, clouds] = await Promise.all([
                 loader.loadAsync('https://raw.githubusercontent.com/yomotsu/ThreeJS-Earth/master/app/images/earth.jpg'),
                 loader.loadAsync('https://raw.githubusercontent.com/yomotsu/ThreeJS-Earth/master/app/images/night.jpg'),
                 loader.loadAsync('https://raw.githubusercontent.com/yomotsu/ThreeJS-Earth/master/app/images/clouds.jpg')
             ]);
 
+            // Earth Shader (Day/Night transition)
             const earth = new THREE.Mesh(
                 new THREE.SphereGeometry(1, 64, 64),
                 new THREE.ShaderMaterial({
-                    uniforms: { dayTex: { value: day }, nightTex: { value: night } },
-                    vertexShader: vShader, fragmentShader: fShader
+                    uniforms: { dayTex: { value: day }, nightTex: { value: night }, sunDir: { value: new THREE.Vector3(5,3,5) } },
+                    vertexShader: `varying vec2 vUv; varying vec3 vNormal; void main() { vUv = uv; vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+                    fragmentShader: `
+                        uniform sampler2D dayTex; uniform sampler2D nightTex; uniform vec3 sunDir;
+                        varying vec2 vUv; varying vec3 vNormal;
+                        void main() {
+                            float light = dot(vNormal, normalize(sunDir));
+                            gl_FragColor = vec4(mix(texture2D(nightTex, vUv).rgb, texture2D(dayTex, vUv).rgb, smoothstep(-0.1, 0.1, light)), 1.0);
+                        }
+                    `
                 })
             );
             scene.add(earth);
 
+            // Cloud Layer
             const cloudMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(1.02, 64, 64),
+                new THREE.SphereGeometry(1.015, 64, 64),
                 new THREE.MeshPhongMaterial({ map: clouds, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending })
             );
             scene.add(cloudMesh);
-
-            const sun = new THREE.DirectionalLight(0xffffff, 2);
-            sun.position.set(5, 3, 5);
-            scene.add(sun);
+            scene.add(new THREE.AmbientLight(0x444444));
 
             function animate() {
                 requestAnimationFrame(animate);
                 earth.rotation.y += 0.001;
-                cloudMesh.rotation.y += 0.0015;
+                cloudMesh.rotation.y += 0.0013;
                 renderer.render(scene, camera);
             }
             animate();
