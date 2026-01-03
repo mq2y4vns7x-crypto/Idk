@@ -10,8 +10,10 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background-color: #0a0e27; margin: 0; overflow: hidden; }
-        .glass { background: rgba(26, 31, 58, 0.8); backdrop-filter: blur(10px); }
+        body { background-color: #0a0e27; margin: 0; color: white; font-family: sans-serif; }
+        .glass { background: rgba(26, 31, 58, 0.9); backdrop-filter: blur(10px); }
+        .message-user { background: #2563eb; border-radius: 1rem 1rem 0 1rem; }
+        .message-ai { background: #1e293b; border: 1px solid #334155; border-radius: 1rem 1rem 1rem 0; }
     </style>
 </head>
 <body>
@@ -27,30 +29,31 @@
             const [apiKey, setApiKey] = useState(localStorage.getItem('claude_api_key') || '');
             const [showApiInput, setShowApiInput] = useState(false);
 
-            // Re-render icons after React loads
+            // This ensures icons show up every time the screen changes
             useEffect(() => {
-                lucide.createIcons();
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
             }, [currentPage, messages, showApiInput]);
 
             const handleSendMessage = async () => {
                 if (!inputValue.trim()) return;
-
                 const userMsg = inputValue;
                 setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
                 setInputValue('');
 
                 if (!apiKey) {
                     setShowApiInput(true);
-                    setMessages(prev => [...prev, { role: 'assistant', content: "Please enter your Claude API key to continue." }]);
+                    setMessages(prev => [...prev, { role: 'assistant', content: "Please enter your Claude API key in the box that just appeared." }]);
                     return;
                 }
 
                 try {
-                    // CORS Proxy to bypass browser blocks
-                    const proxy = "https://corsproxy.io/?";
-                    const url = "https://api.anthropic.com/v1/messages";
+                    // Using a CORS proxy to allow browser-to-Anthropic communication
+                    const proxyUrl = "https://corsproxy.io/?";
+                    const apiUrl = "https://api.anthropic.com/v1/messages";
 
-                    const response = await fetch(proxy + encodeURIComponent(url), {
+                    const response = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
@@ -67,77 +70,98 @@
                     const data = await response.json();
                     if (data.error) throw new Error(data.error.message);
                     
-                    const text = data.content[0].text;
-                    setMessages(prev => [...prev, { role: 'assistant', content: text }]);
+                    const aiResponse = data.content[0].text;
+                    setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
                 } catch (err) {
-                    setMessages(prev => [...prev, { role: 'error', content: "Error: " + err.message }]);
+                    setMessages(prev => [...prev, { role: 'error', content: "❌ Error: " + err.message }]);
                 }
             };
 
+            // Screen 1: Splash
             if (currentPage === 'splash') {
                 return (
-                    <div className="h-screen flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-[#0a0e27] to-[#1a1f3a]">
-                        <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-6">Gemini</h1>
-                        <p className="text-gray-300 text-lg mb-8">Nebula Edge Powered by Claude AI</p>
-                        <button onClick={() => setCurrentPage('home')} className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-full flex items-center gap-3 transition-transform hover:scale-105">
+                    <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#0a0e27] to-[#1a1f3a]">
+                        <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">Gemini</h1>
+                        <p className="text-gray-400 text-lg mb-10 max-w-sm">Experience the future of AI with your own Claude API key.</p>
+                        <button 
+                            onClick={() => setCurrentPage('home')}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-full flex items-center gap-3 transition-all hover:scale-105 shadow-lg shadow-blue-900/20"
+                        >
                             Get Started <i data-lucide="arrow-right"></i>
                         </button>
                     </div>
                 );
             }
 
+            // Screen 2: Chat
             return (
-                <div className="h-screen flex flex-col bg-[#0a0e27] text-white">
-                    <div className="p-4 border-b border-gray-800 flex justify-between items-center glass">
-                        <div className="flex items-center gap-2">
+                <div className="h-screen flex flex-col bg-[#0a0e27]">
+                    {/* Header */}
+                    <div className="p-4 border-b border-gray-800 flex justify-between items-center glass sticky top-0 z-20">
+                        <div className="flex items-center gap-3">
                             <i data-lucide="menu" className="text-gray-400"></i>
-                            <span className="text-blue-400 font-bold text-xl">Gemini</span>
+                            <span className="text-blue-400 font-bold text-xl tracking-tight">Gemini</span>
                         </div>
-                        <i data-lucide="user" className="bg-gray-800 p-2 rounded-full"></i>
+                        <i data-lucide="user" className="bg-gray-800 p-2 rounded-full text-gray-300"></i>
                     </div>
 
+                    {/* Chat Messages */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         {messages.length === 0 && (
-                            <div className="text-center mt-20 opacity-50">
-                                <h2 className="text-2xl">How can I help you today?</h2>
+                            <div className="text-center mt-20 space-y-4 animate-in fade-in duration-700">
+                                <h2 className="text-3xl font-semibold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Hello, Hosam</h2>
+                                <p className="text-gray-500">Enter your key and start a conversation.</p>
                             </div>
                         )}
                         {messages.map((m, i) => (
                             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[80%] p-4 rounded-2xl ${m.role === 'user' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}>
-                                    {m.content}
+                                <div className={`max-w-[85%] p-4 shadow-xl ${m.role === 'user' ? 'message-user' : 'message-ai'}`}>
+                                    <p className="text-sm leading-relaxed">{m.content}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
 
+                    {/* Bottom Input Area */}
                     <div className="p-4 glass border-t border-gray-800">
+                        {/* THE API INPUT BOX (Hidden until you click Plus) */}
                         {showApiInput && (
-                            <div className="mb-4 p-3 bg-gray-900 border border-blue-500 rounded-xl">
+                            <div className="mb-4 p-4 bg-gray-900/50 border border-blue-500 rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+                                <label className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-2 block">Claude API Key</label>
                                 <input 
                                     type="password"
-                                    className="bg-transparent w-full outline-none text-sm"
-                                    placeholder="Paste Claude API Key..."
+                                    className="bg-transparent w-full outline-none text-white text-sm"
+                                    placeholder="Paste sk-ant-... here"
                                     value={apiKey}
                                     onChange={(e) => {
                                         setApiKey(e.target.value);
                                         localStorage.setItem('claude_api_key', e.target.value);
                                     }}
                                 />
+                                <button 
+                                    onClick={() => setShowApiInput(false)}
+                                    className="mt-2 text-xs text-blue-400 font-bold"
+                                >
+                                    SAVE & CLOSE
+                                </button>
                             </div>
                         )}
-                        <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-full px-4">
-                            <button onClick={() => setShowApiInput(!showApiInput)}>
-                                <i data-lucide="plus" className={apiKey ? "text-green-400" : "text-gray-400"}></i>
+
+                        <div className="flex items-center gap-3 bg-gray-800/50 p-2 rounded-full border border-gray-700 px-4 focus-within:border-blue-500 transition-colors">
+                            <button 
+                                onClick={() => setShowApiInput(!showApiInput)} 
+                                className={`p-1 rounded-full ${apiKey ? 'text-green-400' : 'text-gray-400'}`}
+                            >
+                                <i data-lucide="plus"></i>
                             </button>
                             <input 
-                                className="flex-1 bg-transparent outline-none py-2"
+                                className="flex-1 bg-transparent outline-none py-2 text-sm placeholder:text-gray-500"
                                 placeholder="Ask Gemini..."
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                             />
-                            <button onClick={handleSendMessage} className="text-blue-400">
+                            <button onClick={handleSendMessage} className="text-blue-400 hover:text-blue-300 p-1">
                                 <i data-lucide="send"></i>
                             </button>
                         </div>
