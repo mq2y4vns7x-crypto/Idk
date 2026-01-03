@@ -5,137 +5,141 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini Nebula Edge</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #0a0e27; margin: 0; overflow: hidden; }
+        .glass { background: rgba(26, 31, 58, 0.8); backdrop-filter: blur(10px); }
+    </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
-        // Accessing icons from the Lucide library
-        const { Menu, User, ArrowRight, Mic, X, Send, Plus, Sparkles, Video, Lightbulb, MoreHorizontal } = lucide;
+        const { useState, useEffect, useRef } = React;
 
         const NebulaEdgeApp = () => {
             const [currentPage, setCurrentPage] = useState('splash');
             const [messages, setMessages] = useState([]);
             const [inputValue, setInputValue] = useState('');
-            const [isRecording, setIsRecording] = useState(false);
-            const [recordingTime, setRecordingTime] = useState(0);
             const [apiKey, setApiKey] = useState(localStorage.getItem('claude_api_key') || '');
             const [showApiInput, setShowApiInput] = useState(false);
-            const recordingInterval = useRef(null);
+
+            // Re-render icons after React loads
+            useEffect(() => {
+                lucide.createIcons();
+            }, [currentPage, messages, showApiInput]);
 
             const handleSendMessage = async () => {
                 if (!inputValue.trim()) return;
-                
-                const userMessage = inputValue;
-                setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+
+                const userMsg = inputValue;
+                setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
                 setInputValue('');
 
-                if (apiKey) {
-                    try {
-                        // FIX: Added CORS Proxy to allow browser-side requests
-                        const proxyUrl = "https://corsproxy.io/?";
-                        const apiUrl = "https://api.anthropic.com/v1/messages";
-
-                        const response = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "x-api-key": apiKey,
-                                "anthropic-version": "2023-06-01"
-                            },
-                            body: JSON.stringify({
-                                model: "claude-3-5-sonnet-20240620", // FIX: Valid model name
-                                max_tokens: 1024,
-                                messages: [{ role: "user", content: userMessage }]
-                            })
-                        });
-
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-                        }
-
-                        const data = await response.json();
-                        const aiResponse = data.content?.[0]?.text || "I'm here to help!";
-                        setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-                    } catch (error) {
-                        setMessages(prev => [...prev, { role: 'error', content: `❌ ${error.message}` }]);
-                    }
-                } else {
+                if (!apiKey) {
                     setShowApiInput(true);
-                    setMessages(prev => [...prev, { role: 'assistant', content: "Please enter your Claude API key below." }]);
+                    setMessages(prev => [...prev, { role: 'assistant', content: "Please enter your Claude API key to continue." }]);
+                    return;
+                }
+
+                try {
+                    // CORS Proxy to bypass browser blocks
+                    const proxy = "https://corsproxy.io/?";
+                    const url = "https://api.anthropic.com/v1/messages";
+
+                    const response = await fetch(proxy + encodeURIComponent(url), {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-api-key": apiKey,
+                            "anthropic-version": "2023-06-01"
+                        },
+                        body: JSON.stringify({
+                            model: "claude-3-5-sonnet-20240620",
+                            max_tokens: 1024,
+                            messages: [{ role: "user", content: userMsg }]
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+                    
+                    const text = data.content[0].text;
+                    setMessages(prev => [...prev, { role: 'assistant', content: text }]);
+                } catch (err) {
+                    setMessages(prev => [...prev, { role: 'error', content: "Error: " + err.message }]);
                 }
             };
 
-            const saveKey = (key) => {
-                setApiKey(key);
-                localStorage.setItem('claude_api_key', key);
-            };
-
-            // Splash Page
             if (currentPage === 'splash') {
                 return (
-                    <div className="h-screen bg-[#0a0e27] flex flex-col items-center justify-center p-8 text-center">
-                        <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">Gemini</h1>
-                        <p className="text-gray-400 mb-8">Nebula Edge with Claude Integration</p>
-                        <button 
-                            onClick={() => setCurrentPage('home')}
-                            className="bg-blue-600 text-white px-8 py-3 rounded-full flex items-center gap-2 hover:bg-blue-500 transition"
-                        >
-                            Get Started <ArrowRight size={18} />
+                    <div className="h-screen flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-[#0a0e27] to-[#1a1f3a]">
+                        <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-6">Gemini</h1>
+                        <p className="text-gray-300 text-lg mb-8">Nebula Edge Powered by Claude AI</p>
+                        <button onClick={() => setCurrentPage('home')} className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-full flex items-center gap-3 transition-transform hover:scale-105">
+                            Get Started <i data-lucide="arrow-right"></i>
                         </button>
                     </div>
                 );
             }
 
-            // Chat Page
             return (
-                <div className="h-screen bg-[#0a0e27] flex flex-col text-white">
-                    <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                <div className="h-screen flex flex-col bg-[#0a0e27] text-white">
+                    <div className="p-4 border-b border-gray-800 flex justify-between items-center glass">
                         <div className="flex items-center gap-2">
-                            <Menu className="text-gray-400" />
-                            <span className="text-blue-400 font-bold">Gemini</span>
+                            <i data-lucide="menu" className="text-gray-400"></i>
+                            <span className="text-blue-400 font-bold text-xl">Gemini</span>
                         </div>
-                        <User className="bg-gray-800 rounded-full p-1" />
+                        <i data-lucide="user" className="bg-gray-800 p-2 rounded-full"></i>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {messages.map((msg, idx) => (
-                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`p-3 rounded-2xl max-w-[80%] ${msg.role === 'user' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}>
-                                    {msg.content}
+                        {messages.length === 0 && (
+                            <div className="text-center mt-20 opacity-50">
+                                <h2 className="text-2xl">How can I help you today?</h2>
+                            </div>
+                        )}
+                        {messages.map((m, i) => (
+                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[80%] p-4 rounded-2xl ${m.role === 'user' ? 'bg-blue-600' : 'bg-gray-800 border border-gray-700'}`}>
+                                    {m.content}
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="p-4 bg-[#0a0e27]">
+                    <div className="p-4 glass border-t border-gray-800">
                         {showApiInput && (
-                            <div className="mb-2 p-2 bg-gray-800 rounded border border-blue-500">
+                            <div className="mb-4 p-3 bg-gray-900 border border-blue-500 rounded-xl">
                                 <input 
-                                    type="password" 
-                                    className="bg-transparent w-full text-sm outline-none"
-                                    placeholder="Enter Claude API Key..."
+                                    type="password"
+                                    className="bg-transparent w-full outline-none text-sm"
+                                    placeholder="Paste Claude API Key..."
                                     value={apiKey}
-                                    onChange={(e) => saveKey(e.target.value)}
+                                    onChange={(e) => {
+                                        setApiKey(e.target.value);
+                                        localStorage.setItem('claude_api_key', e.target.value);
+                                    }}
                                 />
                             </div>
                         )}
-                        <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-full border border-gray-700">
-                            <button onClick={() => setShowApiInput(!showApiInput)} className="p-1"><Plus size={20} /></button>
+                        <div className="flex items-center gap-3 bg-gray-800 p-2 rounded-full px-4">
+                            <button onClick={() => setShowApiInput(!showApiInput)}>
+                                <i data-lucide="plus" className={apiKey ? "text-green-400" : "text-gray-400"}></i>
+                            </button>
                             <input 
-                                className="flex-1 bg-transparent outline-none text-sm"
+                                className="flex-1 bg-transparent outline-none py-2"
                                 placeholder="Ask Gemini..."
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                             />
-                            <button onClick={handleSendMessage} className="text-blue-400 p-1"><Send size={20} /></button>
+                            <button onClick={handleSendMessage} className="text-blue-400">
+                                <i data-lucide="send"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
